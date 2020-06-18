@@ -1,0 +1,4 @@
+Dear {{user.username}}
+Welcome to Book Review
+We have just seen you have signed up for our application and We want to welcome you to the family. 
+Please enjoy and don't forget to review and rate.
