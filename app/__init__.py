@@ -34,6 +34,7 @@ def create_app(config_name):
     bcrypt.init_app(app)
     login_manager.init_app(app)
     mail.init_app(app)
+    bootstrap.init_app(app)
 
     # configure UploadSet
     configure_uploads(app,photos)

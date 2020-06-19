@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en" dir="ltr">
 
+
 <head>
     {% if title %}
     <title>Books Reviews Website - {{ title }}</title>
@@ -50,6 +51,7 @@
             {% with messages = get_flashed_messages(with_categories=true) %} {% if messages %} {% for category, message in messages %}
             <div class="alert alert-{{ category }}">
                 {{ message }}
+              
             </div>
             {% endfor %} {% endif %} {% endwith %} {% block content %}{% endblock content %}
         </div>

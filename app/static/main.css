@@ -1,5 +1,13 @@
+* {
+  box-sizing: border-box;
+}
+
 body {
- color: #9e2796;
+  margin: 0px;
+}
+
+body {
+ color: #290d05;
  font-size: 12px;
  overflow-x: hidden;
 }
@@ -10,11 +18,11 @@ header {
 }
 
 h1, h2, h3, h4, h5, h6 {
-  color: #9e2796;
+  color: #2c0229;
 }
 nav {
   overflow: hidden;
-  background-color: #898989;
+  background-color: #3f3d3d;
   margin-bottom: 5px;
   font-size: 14px;
 }
@@ -26,6 +34,11 @@ nav a {
   color: black;
 }
 
+nav a {
+  float: left;
+  margin: 20px;
+}
+
 nav a:hover {
   background-color: #735375;
   color: white;
@@ -34,6 +47,7 @@ nav a:hover {
 
 .list-group-item {
   display: block;
+  
 }
 
 .list-group-item:hover {

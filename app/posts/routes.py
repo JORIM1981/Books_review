@@ -82,12 +82,11 @@ def search():
     return render_template('search.html', title='Search', form = form)
 
 
-
 @posts.route("/results", methods=['POST', 'GET'])
 @login_required
 def results():
     return render_template('results.html')
-
+  
 
 @posts.route("/<string:book_num>", methods=['POST', 'GET'])
 @login_required
