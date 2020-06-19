@@ -4,8 +4,8 @@ from flask import render_template, url_for, flash, redirect, request, abort, jso
 from flask_login import current_user, login_required
 from app import db
 from app.models import Post, Books
-from app.posts.forms import PostForm
-#import requests
+from app.posts.forms import PostForm, Search
+import requests
 
 
 
@@ -63,21 +63,30 @@ def delete_post(post_id):
 @posts.route("/search")
 @login_required
 def search():
-    return render_template('search.html', title='Search')
+    form = Search()
+    if form.search_item.data == 'title' and form.validate_on_submit():
+        books = Books.query.filter_by(name = form.name.data).first()
+
+        return redirect(url_for('posts.results'), books = books)
+
+    elif form.search_item.data == 'author' and form.validate_on_submit():
+        books = Books.query.filter_by(author = form.name.data).first()
+
+        return redirect(url_for('posts.results'), books = books)
+
+    elif form.search_item.data == 'isbn' and form.validate_on_submit():
+        books = Books.query.filter_by(book_num = form.name.data).first()
+
+        return redirect(url_for('posts.results'), books = books)
+ 
+    return render_template('search.html', title='Search', form = form)
+
 
 
 @posts.route("/results", methods=['POST', 'GET'])
 @login_required
 def results():
-    category = request.form.get('category')
-    search = request.form.get('search')
-    search = "'%" + search + "%'"
-    results = db.session.execute("SELECT * FROM Books WHERE " + category + " LIKE " + search).fetchall()
-    if db.session.execute("SELECT * FROM Books WHERE " + category + " LIKE " + search).rowcount == 0:
-        message = 'We are sorry. There were no results for your search.'
-        return render_template("results.html", message=message, results=results, title='Search Results')
-
-    return render_template("results.html", results=results, title='Search Results')
+    return render_template('results.html')
 
 
 @posts.route("/<string:book_num>", methods=['POST', 'GET'])
