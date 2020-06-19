@@ -1,54 +1,62 @@
-from flask import render_template, url_for, flash, redirect, request, Blueprint
-from flask_login import login_user, current_user, logout_user, login_required
+from . import users
+from flask import render_template,redirect,url_for, flash,request
 from app import db, bcrypt
-from app.models import User, Post
-from app.users.forms import RegistrationForm, LoginForm, UpdateAccountForm, RequestResetForm, ResetPasswordForm
-from app.users.utils import save_picture, send_reset_email
-
-users = Blueprint('user', __name__)
-
-
-@users.route("/register", methods=['GET', 'POST'])
-def register():
-    if current_user.is_authenticated:
-        return redirect(url_for('main.home'))
-    form = RegistrationForm()
-    if form.validate_on_submit():
-        hashed_pw = bcrypt.generate_password_hash(form.password.data).decode('utf-8')
-        user = User(username=form.username.data, email=form.email.data, password=hashed_pw)
-        db.session.add(user)
-        db.session.commit()
-        flash('Your account has been created! You are now able to login.', 'success')
-        return redirect(url_for('users.login'))
-    return render_template('register.html', title='Register', form=form)
+from flask_login import login_user,logout_user,login_required, current_user
+from ..models import User, Subscribe
+from .forms import LoginForm,RegistrationForm,RequestResetPasswordForm, PasswordResetForm, ContactForm, ChangeEmailForm, ChangePasswordForm, UpdateAccountForm
+from ..email import mail_message
 
 
-@users.route("/login", methods=['GET', 'POST'])
+@users.route('/login',methods=['GET','POST'])
 def login():
-    if current_user.is_authenticated:
-        return redirect(url_for('main.home'))
-    form = LoginForm()
-    if form.validate_on_submit():
-        user = User.query.filter_by(email=form.email.data).first()
-        if user and bcrypt.check_password_hash(user.password, form.password.data):
-            login_user(user, remember=form.remember.data)
-            next_page = request.args.get('next')
-            return redirect(next_page) if next_page else redirect(url_for('main.home'))
-        else:
-            flash('Login failed. Check email and password', 'danger')
-    return render_template('login.html', title="Login", form=form)
+    login_form = LoginForm()
+
+    if login_form.validate_on_submit():
+        user = User.query.filter_by(email = login_form.email.data).first()
+        
+        if user is None or not user.verify_password(login_form.password.data):
+            flash('invalid username or password', 'form-error')
+            return redirect(url_for('users.login'))
+        login_user(user)
+        next_page = request.args.get('next')
+        if next_page is None or not next_page.startswith('/'):
+            next_page = url_for('main.home')
+        flash("You are now logged in", 'form-success')
+        return redirect(next_page)
+
+    title = " Website login"
+    return render_template('auth/login.html',form = login_form,title=title)
 
 
-@users.route("/logout")
+@users.route('/logout')
+@login_required
 def logout():
     logout_user()
-    return redirect(url_for('main.home'))
+    flash('You have been successfully logged out')
+    return redirect(url_for("main.home"))
+
+
+@users.route('/register',methods = ["GET","POST"])
+def register():
+    
+    form = RegistrationForm()
+    
+    if form.validate_on_submit():
+        user = User(email = form.email.data, username = form.username.data, password = form.password.data)
+        db.session.add(user)
+        db.session.commit()
+        mail_message("Welcome ","email/welcome", user.email,user=user)
+        
+        return redirect(url_for('users.login'))
+    title = "New Account"
+    return render_template('auth/register.html',form = form, title =title)
 
 
 @users.route("/account", methods=['GET', 'POST'])
 @login_required
 def account():
     form = UpdateAccountForm()
+
     if form.validate_on_submit():
         if form.picture.data:
             picture_file = save_picture(form.picture.data)
@@ -73,31 +81,138 @@ def user_posts(username):
     return render_template('user_posts.html', posts=posts, user=user, title=f'{user.username} Posts')
 
 
+@users.route('/user/<username>/update/pic',methods= ['POST'])
+@login_required
+def update_pic(username):
+    user = User.query.filter_by(username = username).first()
+    if 'photo' in request.files:
+        filename = photos.save(request.files['photo'])
+        path = f'photos/{filename}'
+        user.profile_pic_path = path
+        user_photo = PhotoProfile(pic_path = path,user = user)
+        db.session.commit()
+    return redirect(url_for('users.account',username=username))
+
+
 @users.route("/reset_password", methods=['GET', 'POST'])
-def reset_request():
+def reset_password_request():
     if current_user.is_authenticated:
-        return redirect(url_for('main.home'))
-    form = RequestResetForm()
+        return redirect(url_for('main.index'))
+
+    form = RequestResetPasswordForm()
     if form.validate_on_submit():
         user = User.query.filter_by(email=form.email.data).first()
-        send_reset_email(user)
-        flash('An email has been sent with instructions to reset your password', 'success')
-    return render_template('reset_request.html', title='Reset Password', form=form)
-
-
-@users.route("/reset_password/<token>", methods=['GET', 'POST'])
-def reset_token(token):
-    if current_user.is_authenticated:
-        return redirect(url_for('main.home'))
-    user = User.verify_reset_token(token)
-    if user is None:
-        flash('That is an invalid or expired token', 'warning')
-        return redirect(url_for('users.reset_request'))
-    form = ResetPasswordForm()
-    if form.validate_on_submit():
-        hashed_pw = bcrypt.generate_password_hash(form.password.data).decode('utf-8')
-        user.password = hashed_pw
-        db.session.commit()
-        flash('Your password has been changed! You are now able to login.', 'success')
+        if user:
+            token = user.generate_reset_token()
+            mail_message("Reset your Password",'email/reset_password', user.email, user=user, token=token)
+        flash('A password reset link has been sent to {}'.format(form.email.data), 'form-info')
         return redirect(url_for('users.login'))
-    return render_template('reset_token.html', title='Reset Password', form=form)
+    return render_template('auth/reset_password.html', form=form, title='Password Reset')
+
+
+@users.route('/reset_password/<token>', methods=['GET', 'POST'])
+def password_reset(token):
+    if current_user.is_authenticated:
+        return redirect(url_for('main.index'))
+
+    form = PasswordResetForm()
+    
+    if form.validate_on_submit():
+        user = User.query.filter_by(email=form.email.data).first()
+        if user is None:
+            flash('Invalid email address!', 'form-error')
+            return redirect(url_for('users.reset_password_request'))
+    
+        if user.reset_password(token, form.password.data):
+            flash('Your password was successfully changed.')
+            return redirect(url_for('users.login'))
+        else:
+            flash('The password link is invalid or has expired', 'form-error')
+    return render_template('auth/reset_password.html', form=form)
+
+
+@users.route('/change-email/<token>')
+@login_required
+def change_email(token):
+    if current_user.change_email(token):
+        db.session.commit()
+        flash("Email address has been updated!", 'form-success')
+    else:
+        flash("Invalid request", 'form-warning')
+    return redirect(url_for('users.login'))
+
+
+@users.route('/confirm/<token>')
+@login_required
+def confirm(token):
+    if current_user.confirmed:
+        return redirect(url_for('main.index'))
+    if current_user.confirm(token):
+        flash('You have confirmed your account', 'form-success')
+    else:
+        flash('The confirmation link is invalid or has expired ', 'form-error')
+    return redirect(url_for('main.index'))
+
+
+@users.route('/user/change-password', methods=['GET', 'POST'])
+@login_required
+def change_password():
+    form = ChangePasswordForm()
+    if form.validate_on_submit():
+        if current_user.verify_password(form.old_password.data):
+            current_user.password = form.password.data
+            db.session.add(current_user)
+            db.session.commit()
+            flash("your password has been updated!", 'form-success')
+            return redirect(url_for('users.login'))
+        else:
+            flash('Invalid password', 'form-error')
+    return render_template('auth/change_password.html', form=form)
+
+
+@users.route('/user/change-email', methods=['GET', 'POST'])
+@login_required
+def change_email_request():
+    form = ChangeEmailForm()
+    if form.validate_on_submit():
+        if current_user.verify_password(form.password.data):
+            new_email = form.email.data
+            token = current_user.generate_change_email_token(new_email)
+            send_email(new_email, 'Confirm your email address',
+                       'email/change_email',
+                       user=current_user, token=token)
+            flash('A confirmation link has been sent to {}'.format(new_email),
+                  'form-info')
+            return redirect(url_for('users.login'))
+        flash('Invalid email address', 'form-error')
+    return render_template('auth/change_email.html', form=form)
+
+
+@users.route('/contact')
+def contact():
+  form = ContactForm()
+ 
+  if request.method == 'POST':
+    return 'Form posted.'
+ 
+  elif request.method == 'GET':
+    return render_template('contact.html', form=form)
+
+
+@users.route('/subscribe', methods=["GET", "POST"])
+def subscribe():
+    
+    subscribingform = SubscribeForm()
+    
+    if subscribingform.validate_on_submit():
+        subscribers = Subscribe(name=subscribingform.usename.data, email=subscribingform.useremail.data)
+
+        db.session.add(subscribers)
+        db.session.commit()
+
+        mail_message("Welcome to Book Review...", "email/subscribing", subscribers.email, subscribers=subscribers)
+        
+        return redirect(url_for('main.index'))
+        
+    title = "Subscribe to get new updates"
+    return render_template('auth/subscribe.html', title =title, subscribe_form=subscribingform)

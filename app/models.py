@@ -1,4 +1,6 @@
 from datetime import datetime
+from werkzeug.security import generate_password_hash,check_password_hash
+from itsdangerous import BadSignature, SignatureExpired
 from itsdangerous import TimedJSONWebSignatureSerializer as Serializer
 from flask import current_app
 from . import db, login_manager
@@ -17,16 +19,43 @@ class User(db.Model, UserMixin):
     email = db.Column(db.String(120), unique=True, nullable=False)
     image_file = db.Column(db.String(20), default='default.jpg', nullable=False)
     password = db.Column(db.String(60), nullable=False)
+    pass_secure = db.Column(db.String(255))
     posts = db.relationship('Post', backref='author', lazy=True)
 
-    def __repr__(self):
-        return f"User('{self.username}', '{self.email}', '{self.image_file}')"
+    @property
+    def password(self):
+        raise AttributeError('You cannot read the password attribute')
 
-    def get_reset_token(self, expires_sec=1800):
+    @password.setter
+    def password(self, password):
+        self.pass_secure = generate_password_hash(password)
+
+    def verify_password(self,password):
+        return check_password_hash(self.pass_secure, password)
+
+    def generate_confirmation_token(self, expiration=3600):
+        s = Serializer(current_app.config['SECRET_KEY'], expiration)
+        return s.dumps({'confirm': self.id})
+
+    def generate_reset_token(self, expires_sec=1800):
         s = Serializer(current_app.config['SECRET_KEY'], expires_sec)
-        return s.dumps({'user_id': self.id}).decode('utf-8')
+        return s.dumps({'user': self.id}).decode('utf-8')
 
-    @staticmethod
+    
+    def reset_password(self, token, new_password):
+        s = Serializer(current_app.config['SECRET_KEY'])
+        try:
+            data = s.loads(token)
+            #import pdb; pdb.set_trace()
+        except(BadSignature, SignatureExpired):
+            return False
+        if data.get('user') != self.id:
+            return False
+        self.password = new_password
+        db.session.add(self)
+        db.session.commit()
+        return True
+
     def verify_reset_token(token):
         s = Serializer(current_app.config['SECRET_KEY'])
         try:
@@ -34,6 +63,9 @@ class User(db.Model, UserMixin):
         except:
             return None
         return User.query.get(user_id)
+
+    def __repr__(self):
+        return f"User('{self.username}', '{self.email}', '{self.image_file}')"
 
 
 class Post(db.Model):
@@ -55,3 +87,12 @@ class Books(db.Model):
 
     def __repr__(self):
         return f"Post('{self.id}', '{self.title}', '{self.date_posted}')"
+
+class Subscribe(db.Model):
+    __tablename__ = 'subscribers'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100))
+    email = db.Column(db.String(100), unique=True)
+
+    def __repr__(self):
+        return f'User {self.name}'

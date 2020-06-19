@@ -1,3 +1,4 @@
+from . import posts
 from datetime import datetime
 from flask import render_template, url_for, flash, redirect, request, abort, jsonify, Blueprint
 from flask_login import current_user, login_required
@@ -6,7 +7,7 @@ from app.models import Post, Books
 from app.posts.forms import PostForm, Search
 import requests
 
-posts = Blueprint('posts', __name__)
+
 
 
 @posts.route("/post/new", methods=['GET', 'POST'])
@@ -85,6 +86,7 @@ def search():
 @login_required
 def results():
     return render_template('results.html')
+  
 
 @posts.route("/<string:book_num>", methods=['POST', 'GET'])
 @login_required
