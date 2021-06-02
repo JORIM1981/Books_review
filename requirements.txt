@@ -27,7 +27,7 @@ Jinja2==2.11.2
 jsonify==0.5
 Mako==1.1.2
 Markdown==3.2.2
-markdown2==2.3.8
+markdown2==2.4.0
 MarkupSafe==1.1.1
 Pillow==7.1.2
 psycopg2==2.8.5
